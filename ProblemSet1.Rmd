@@ -1,9 +1,9 @@
 ---
 title: "Problem Set 1"
 subtitle: By Jae You (jhy479)
-output: md_document
+output: pdf_document
 ---
-``` {r commands, echo=FALSE}
+``` {r commands, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 
 ABIA <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/ABIA.csv")
 library(ggplot2)
@@ -15,46 +15,46 @@ library(parallel)
 library(foreach)
 ```
 
-1) One interesting observation from the 2008 flight data for Austin-Bergstrom International Airport is the departure time of flights over the course of the week.
+ 1) One interesting observation from the 2008 flight data for Austin-Bergstrom International Airport is the departure time of flights over the course of the week.
 
-```{r ABIA Departure}
+```{r ABIA Departure, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 
 ggplot(ABIA)+
   geom_boxplot(aes(group=DayOfWeek, x=DayOfWeek, y=DepTime))+
   xlim(0,7.5)
 ```
 
- The boxplots show the Departure Time of the flights across the week, where 1~7 represent the days Monday through Sunday. From the boxplots above, we see that the mean departure time is roughly the same for all the flights except on Saturdays, where the flight departs early. With such a large sample size of almost 100,000 flights, we would expect an even spread across the week, but Saturday's departure time is a clear outlier. However, I came up with a potential explanation for this phenomenon from the graph below.
+The boxplots show the Departure Time of the flights across the week, where 1~7 represent the days Monday through Sunday. From the boxplots above, we see that the mean departure time is roughly the same for all the flights except on Saturdays, where the flight departs early. With such a large sample size of almost 100,000 flights, we would expect an even spread across the week, but Saturday's departure time is a clear outlier. However, I came up with a potential explanation for this phenomenon from the graph below.
 
-``` {r ABIA Distance}
+``` {r ABIA Distance, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 library(ggplot2)
 ggplot(ABIA)+
   geom_boxplot(aes(group=DayOfWeek, x=DayOfWeek, y=Distance))+
   xlim(0,7.5)
 ```
 
- By graphing the distance that flights have to travel across the week, we can see that flights on Saturday have a higher mean distance. So flights would be flying a longer distance than normal on average, which would explain why the flights must depart earlier in order to travel a longer distance and arrive on time.
- 
- 
- 2)
-```{r commands2}
+By graphing the distance that flights have to travel across the week, we can see that flights on Saturday have a higher mean distance. So flights would be flying a longer distance than normal on average, which would explain why the flights must depart earlier in order to travel a longer distance and arrive on time.
+
+2)
+
+```{r commands2, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
  olympics <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/olympics_top20.csv")
 ```
- 
- a)
- 
-```{r 2A}
+
+a)
+
+```{r 2A, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 olympics %>%
   group_by(sex) %>%
   select(height, sport, event) %>%
   summarize(q95_heights = quantile(height, 0.95))
 ```
 
- The 95th percentile of heights for female competitors is 186cm.
- 
- b)
- 
-```{r 2B}
+The 95th percentile of heights for female competitors is 186cm.
+
+b)
+
+```{r 2B, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 data_olympics =olympics %>%
   filter(sex == "F") %>%
   group_by(event) %>%
@@ -64,11 +64,13 @@ head(arrange(data_olympics, desc(sdh)))
 
 ```
 
- The event Rowing Women's Coxed Fours had the greatest standard deviation in female competitor's heights.
- 
- c)
- 
-```{r 2C}
+The event Rowing Women's Coxed Fours had the greatest standard deviation in female competitor's heights.
+
+
+
+c)
+
+```{r 2C, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
  olympics <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/olympics_top20.csv")
 
  olympics_swim = olympics %>%
@@ -80,24 +82,26 @@ head(arrange(data_olympics, desc(sdh)))
   geom_line(aes(x=year, y=avg_age, color=sex))+
   scale_color_brewer(type = "qual")
 ```
- From the 1930s to now, the average age of Olympic Swimmers has increased over time for both males and females. However, there were only male Olympic Swimmers in 1900 to 1925, where the trend was increasing over time until a sharp drop in the average age around 1925.
 
+From the 1930s to now, the average age of Olympic Swimmers has increased over time for both males and females. However, there were only male Olympic Swimmers in 1900 to 1925, where the trend was increasing over time until a sharp drop in the average age around 1925.
 
- 3) 
+3)
 
-```{r sclass}
+```{r sclass, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 sclass <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/sclass.csv")
 ```
-```{r sclass_trims}
+
+```{r sclass_trims, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 sclass350 = sclass %>%
   filter(trim == 350)
 
 sclass65AMG = sclass %>%
   filter(trim == "65 AMG")
 ```
- After filtering the two trim levels, I ran KNN for the 350 trim level below:
 
-```{r sclass350_data}
+After filtering the two trim levels, I ran KNN for the 350 trim level below:
+
+```{r sclass350_data, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 
 sclass350_split = initial_split(sclass350, prop=0.8)
 sclass350_train = training(sclass350_split)
@@ -116,15 +120,15 @@ cv_grid350 = foreach(k=2:100, .combine = "rbind") %dopar% {
 head(cv_grid350, n=20)  
 ```
 
-```{r sclass_350 graph}
+```{r sclass_350 graph, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 ggplot(cv_grid350)+
   geom_point(aes(x=k, y=err))
 ```
 
- We can see that the lowest rmse is at K=13 for the 350 trim level.
- The fitted model is below:
+We can see that the lowest rmse is at K=13 for the 350 trim level.
+The fitted model is below:
 
-```{r sclass_350 fitted model}
+```{r sclass_350 fitted model, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 knn13 = knnreg(mileage ~ price, data=sclass350_train, k=13)
 modelr::rmse(knn13, sclass350_test)
 
@@ -134,13 +138,13 @@ sclass350_test = sclass350_test %>%
 p_test = ggplot(data=sclass350_test)+
   geom_point(aes(x=price, y=mileage), alpha=0.2)
 ```
-
-```{r sclass350 graph}
+```{r sclass350 graph, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 p_test + geom_line(aes(x=price, y=mileage_pred), color="red", linewidth=1.5)
 ```
 
- Next, I ran the 65 AMG trim level:
-```{r sclass65AMG data} 
+Next, I ran the 65 AMG trim level:
+
+```{r sclass65AMG data, echo=FALSE, results="hide", message=FALSE, warning=FALSE} 
 
 sclass65AMG_split = initial_split(sclass65AMG, prop=0.8)
 sclass65AMG_train = training(sclass65AMG_split)
@@ -159,16 +163,16 @@ cv_grid65AMG = foreach(k=2:100, .combine = "rbind") %dopar% {
 head(cv_grid65AMG, n=20)  
 ```
 
-```{r sclass_65AMG graph}
+```{r sclass_65AMG graph, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 ggplot(cv_grid65AMG)+
   geom_point(aes(x=k, y=err))
 
 ``` 
- 
- We can see that the lowest rmse is at K=18 for the 65AMG trim level.
- The fitted model is below:
- 
-```{r sclass65AMG fitted model}
+
+We can see that the lowest rmse is at K=18 for the 65AMG trim level.
+The fitted model is below:
+
+```{r sclass65AMG fitted model, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 
 knn18 = knnreg(mileage ~ price, data=sclass65AMG_train, k=18)
 modelr::rmse(knn18, sclass65AMG_test)
@@ -180,7 +184,6 @@ p_test2 = ggplot(data=sclass65AMG_test)+
   geom_point(aes(x=price, y=mileage), alpha=0.2)
 ```
 
-```{r sclass65AMG graph}
+```{r sclass65AMG graph, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
 p_test2 + geom_line(aes(x=price, y=mileage_pred), color="red", linewidth=1.5)
 ```
- 
