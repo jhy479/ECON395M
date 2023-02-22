@@ -224,6 +224,7 @@ split_up <-unlist(lapply(lap, nrow))"
 From here, I tried many things to split/train/test:
 
 ->Running initial_split(folds20,prop=0.8) led to the error "subscript out of bounds".
+
 ->Running the individual folds themselves (split=initial_split(folds20[["Fold01"]], p=0.8)
 split=initial_split(lap[["Fold01"]], p=0.8)) led to a multiple formal argument error, with and without the lap variable.
 
