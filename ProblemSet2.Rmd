@@ -1,0 +1,254 @@
+---
+title: "Problem Set 2"
+subtitle: By Jae You (jhy479)
+output: pdf_document
+---
+``` {r commands, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(tidyverse)
+library(rsample)  
+library(caret)
+library(modelr)
+library(parallel)
+library(foreach)
+library(mosaic)
+library(lubridate)
+library(ROCR)
+data("SaratogaHouses")
+
+```
+1)Saratoga House prices
+```{r Saratoga, echo=FALSE, message=FALSE, warning=FALSE}
+
+K_five = 5
+
+SaratogaHouses = SaratogaHouses %>%
+  mutate(fold_id = rep(1:K_five, length=nrow(SaratogaHouses)) %>% sample)
+
+rmse_cv_Saratoga = foreach(fold = 1:K_five, .combine='c') %do% {
+  saratoga_split=initial_split(SaratogaHouses, prop=0.8)
+  saratoga_train=training(saratoga_split)
+  saratoga_test=testing(saratoga_split)
+  lm3 = lm(price ~ (. - pctCollege - sewer - waterfront - landValue - newConstruction), data=saratoga_train)
+  modelr::rmse(lm3, data=filter(SaratogaHouses, fold_id == fold))
+}
+
+mean(rmse_cv_Saratoga)
+```
+This is the previous model that was done in class, with an average rmse of 65969.85.
+
+```{r Saratoga2, echo=FALSE, message=FALSE, warning=FALSE}
+rmse_cv_Saratoga2 = foreach(fold = 1:K_five, .combine='c') %do% {
+  saratoga2_split=initial_split(SaratogaHouses, prop=0.8)
+  saratoga2_train=training(saratoga_split)
+  saratoga2_test=testing(saratoga_split)
+  lm4 = lm(price ~ (. -centralAir - pctCollege - sewer - waterfront - newConstruction), data=saratoga2_train)
+  modelr::rmse(lm4, data=filter(SaratogaHouses, fold_id == fold))
+}
+
+mean(rmse_cv_Saratoga2)
+```
+
+This is the new model that outperforms the model done in class, with
+an average rmse of 59384.4. I removed CentralAir and added the landValue interaction.
+
+```{r Saratoga5, echo=FALSE, message=FALSE, warning=FALSE}
+saratoga5_split = initial_split(SaratogaHouses, prop = 0.8)
+saratoga5_train = training(saratoga5_split)
+saratoga5_test = testing(saratoga5_split)
+
+Xtrain = model.matrix(~ age + livingArea + bedrooms - 1, data=saratoga5_train)
+Xtest = model.matrix(~ age + livingArea + bedrooms - 1, data=saratoga5_test)
+
+scale_train = apply(Xtrain, 2, sd) 
+Xtilde_train = scale(Xtrain, scale = scale_train)
+Xtilde_test = scale(Xtest, scale = scale_train)
+
+Xsaratoga5 = model.matrix(~price + Xtilde_train + . - 1, data=saratoga5_split)
+X5=as.data.frame(Xsaratoga5)
+
+K_fold = 5
+
+X5 = X5 %>%
+  mutate(fold_id = rep(1:K_fold, length=nrow(X5)) %>% sample)
+
+rmse_cv_Saratoga5 = foreach(fold = 1:K_fold, .combine='c') %do% {
+  X5_split=initial_split(X5, prop=0.8)
+  X5_train=training(X5_split)
+  X5_test=testing(X5_split)
+  knn10 = knnreg(price ~ (Xtilde_trainage + Xtilde_trainlivingArea + Xtilde_trainbedrooms + lotSize + age + landValue + livingArea + pctCollege + bedrooms + fireplaces + bathrooms + rooms), data=X5_train, k=10)
+  modelr::rmse(knn10, data=filter(X5, fold_id == fold))
+}
+
+mean(rmse_cv_Saratoga5)
+```
+This is the KNN model that was scaled and done at a lower value of K than usual, K=10.
+It has an average rmse of 63550.47, which is still higher than the linear model that I produced. Theoretically, the rmse of the KNN model can be drastically lowered by lowering the value of K (as K=1 gives an rmse of 545!). However, this would cause much higher variance in return for eliminating bias, which is not helpful for differentiating between noise and signals for Saratoga house prices. As K=10 is already a low enough number and yet the KNN model is still outperformed by the linear model, I would argue that the linear model does a better job of achieving lower out-of-sample mean-squared errors.
+
+2)Classification and retrospective sampling
+
+```{r German1, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
+german_credit <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/german_credit.csv")
+
+logit_default = glm(Default ~ ., data=german_credit, family='binomial')
+coef(logit_default) %>% round(2)
+
+ggplot(logit_default)+
+  geom_col(aes(x=history, y=Default))
+```
+```{r German2, echo=FALSE, message=FALSE, warning=FALSE}
+phat_test_logit_default = predict(logit_default, type='response')
+yhat_test_logit_default = ifelse(phat_test_logit_default > 0.5, 1, 0)
+confusion_out_logit = table(y = logit_default$y,
+                            yhat = yhat_test_logit_default)
+confusion_out_logit
+
+626/sum(table(logit_default$y))
+```
+
+We can see that the majority of defaulters are those with poor history,
+while borrowers with good and terrible history both tend not to default as much.
+This may be because individuals with good credit history would want to keep having
+a good history, while those with terrible history may not be approved of loans
+which they may consider defaulting. On the other hand, those with poor history may
+feel as if they can default some more before they hit rock bottom with terrible history.
+
+I believe this model is a step in the right direction for building a predictive model of defaults. However, in order to better know if borrowers may have higher or lower probabilities of defaulting, I would suggest that the bank take into account the duration of the loan and the purpose of the loan, as some borrowers who are looking to default may prefer shorter-term loans since they have no intention to pay it back.
+
+3)Children and hotel reservations
+
+For all the models, I averaged the estimate of out-of-sample RMSE over many different random train/test splits due to random variation.
+
+Baseline 1:
+```{r baseline1, echo=FALSE, message=FALSE, warning=FALSE}
+hotels_dev <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/hotels_dev.csv")
+hotels_val <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/hotels_val.csv")
+
+
+K_fc = 5
+
+hotels_dev = hotels_dev %>%
+  mutate(fold_id = rep(1:K_fc, length=nrow(hotels_dev)) %>% sample)
+
+rmse_cv_hotels_dev = foreach(fold = 1:K_fc, .combine='c') %do% {
+  hotels_dev_split=initial_split(hotels_dev, prop=0.8)
+  hotels_dev_train=training(hotels_dev_split)
+  hotels_dev_test=testing(hotels_dev_split)
+  lmm1 = lm(children ~ (market_segment + adults + customer_type + is_repeated_guest), data=hotels_dev_train)
+  modelr::rmse(lmm1, data=filter(hotels_dev, fold_id == fold))
+}
+
+mean(rmse_cv_hotels_dev)
+```
+Baseline 2:
+```{r baseline2, echo=FALSE, message=FALSE, warning=FALSE}
+
+rmse_cv_hotels_dev2 = foreach(fold = 1:K_fc, .combine='c') %do% {
+  hotels_dev_split2=initial_split(hotels_dev, prop=0.8)
+  hotels_dev_train2=training(hotels_dev_split2)
+  hotels_dev_test2=testing(hotels_dev_split2)
+  lmm2 = lm(children ~ (. - arrival_date), data=hotels_dev_train2)
+  modelr::rmse(lmm2, data=filter(hotels_dev, fold_id == fold))
+}
+
+mean(rmse_cv_hotels_dev2)
+```
+
+Baseline 3: I kept getting errors when trying to add more than 1 interaction, as well as any log(variable) or interactions with children.
+Thus, my best linear model is the following, which slightly outperforms model #2:
+
+```{r baseline3, echo=FALSE, message=FALSE, warning=FALSE}
+rmse_cv_hotels_dev3 = foreach(fold = 1:K_fc, .combine='c') %do% {
+  hotels_dev_split3=initial_split(hotels_dev, prop=0.8)
+  hotels_dev_train3=training(hotels_dev_split3)
+  hotels_dev_test3=testing(hotels_dev_split3)
+  lmm3 = lm(children ~ (. + (stays_in_weekend_nights * stays_in_week_nights) - arrival_date - previous_cancellations), data=hotels_dev_train3)
+  modelr::rmse(lmm3, data=filter(hotels_dev, fold_id == fold))
+}
+
+mean(rmse_cv_hotels_dev3)
+```
+Step 1:
+
+Originally, my code was to validate the linear model that I did in baseline 3. However, I kept having the "factor arrival_date has new levels" error, even though my model excluded arrival_date entirely. I attempted to remove the column itself from the data, but failed to do so. Here is the attempt below:
+
+"hotels_val = hotels_val %>%
+  mutate(fold_id = rep(1:5, length=nrow(hotels_val)) %>% sample)
+
+rmse_cv_hotels_val = foreach(fold = 1:5, .combine='c') %do% {
+  hotels_val_split=initial_split(hotels_val, prop=0.8)
+  hotels_val_train=training(hotels_val_split)
+  hotels_val_test=testing(hotels_val_split)
+  lmval = lm(children ~ . + (stays_in_weekend_nights * stays_in_week_nights) - arrival_date- previous_cancellations, data=hotels_val_train)
+  modelr::rmse(lmval, data=filter(hotels_val, fold_id == fold))
+}"
+
+As such, I went straight to logistic regression: 
+
+```{r Children2, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
+hotels_val_split2=initial_split(hotels_val, prop=0.8)
+hotels_val_train2=training(hotels_val_split2)
+hotels_val_test2=testing(hotels_val_split2)
+
+logit_children = glm(children ~ . + (stays_in_weekend_nights * stays_in_week_nights) - arrival_date- previous_cancellations, data=hotels_val_train2, family='binomial')
+coef(logit_children) %>% round(2)
+
+phat_test_logit_children = predict(logit_children, type='response')
+yhat_test_logit_children = ifelse(phat_test_logit_children > 0.5, 1, 0)
+
+pred <-prediction(phat_test_logit_children, yhat_test_logit_children)
+
+perf <- performance(pred, "tpr", "fpr")
+
+plot(perf)
+```
+```{r confusion, echo=FALSE, message=FALSE}
+confusion_out_logit = table(y = logit_children$y,
+                            yhat = yhat_test_logit_children)
+confusion_out_logit
+```
+
+From the confusion matrix, we can see that the (out-of-sample) FPR here is 52/(52+3634)= 0.0141, and the TPR here is 106/(207+106)= 0.3387. So the ROC curve should have a point at (0.0141, 0.3387).
+
+
+Model validation: step 2: 
+I was able to split the data into 20 equal folds. However, I could not use the folds for my training/testing sets because of many errors, most notably "'x' should be an 'rsplit' object."
+Here is my code:
+
+"folds20 <- createFolds(hotels_val$children, k=20)
+
+lap <- lapply(folds20, function(ind, dat) dat[ind,], dat = hotels_val)
+split_up <-unlist(lapply(lap, nrow))"
+
+From here, I tried many things to split/train/test:
+
+->Running initial_split(folds20,prop=0.8) led to the error "subscript out of bounds".
+->Running the individual folds themselves (split=initial_split(folds20[["Fold01"]], p=0.8)
+split=initial_split(lap[["Fold01"]], p=0.8)) led to a multiple formal argument error, with and without the lap variable.
+
+```{r children20, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
+k_20= 20
+
+hotels_val20 = hotels_val %>%
+  mutate(fold_id = rep(1:k_20, length=nrow(hotels_val)) %>% sample)
+
+
+hotels_val_split20=initial_split(hotels_val20, prop=0.8)
+hotels_val_train20=training(hotels_val_split20)
+hotels_val_test20=testing(hotels_val_split20)
+
+logit_children20 = glm(children ~ . + (stays_in_weekend_nights * stays_in_week_nights) - arrival_date- previous_cancellations, data=hotels_val_train20, family='binomial')
+coef(logit_children20) %>% round(2)
+
+phat_test_logit_children20 = predict(logit_children20, type='response')
+yhat_test_logit_children20 = ifelse(phat_test_logit_children20 > 0.5, 1, 0)
+```
+
+```{r confusion2, echo=FALSE, message=FALSE}
+confusion_out_logit20 = table(y = logit_children20$y,
+                            yhat = yhat_test_logit_children20)
+confusion_out_logit20
+```
+
+The (out-of-sample) FPR here is 51/(51+3629)= 0.01386, and the TPR here is 121/(198+121)= 0.3793.
