@@ -1,0 +1,269 @@
+---
+title: "Problem Set 4"
+subtitle: By Jae You (jhy479)
+output: pdf_document
+---
+``` {r commands, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(tidyverse)
+library(rsample)  
+library(caret)
+library(modelr)
+library(parallel)
+library(foreach)
+library(ROCR)
+library(mosaic)
+library(scales)
+library(knitr)
+library(corrplot)
+library(ggpubr)
+library(arules)
+library(arulesViz)
+```
+
+1)Clustering and PCA
+
+Below are the Principle Component Analysis on the 11 chemical properties as well as the standard deviation and variance of the first five principle components.
+
+``` {r wine1, echo=FALSE, message=FALSE, warning=FALSE}
+
+wine <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv")
+
+wine_color_qual= wine %>%
+  select(-c (color, quality))
+
+wine_color_qual <-scale(wine_color_qual, scale=TRUE)
+
+wine_PCA = prcomp(wine_color_qual, rank=5)
+
+wine_PCA_2 = round(wine_PCA$rotation, 6)
+
+wine_PCA_2
+
+summary(wine_PCA)
+```
+
+``` {r wine2, echo=FALSE, message=FALSE, warning=FALSE}
+
+wine_PCA_x = wine_PCA$x
+wine_PCA_df = data.frame(wine_PCA_x)
+
+wine_PCA_plot = ggplot(wine_PCA_df, aes(x=PC1, y=PC2, color=wine$color))+geom_point()
+
+wine_PCA_plot
+
+```
+
+The plot of PC1 and PC2 for the color of the wine is pretty accurate at distinguishing red and white wines, with an even mix in both groups.
+
+Below is the plot done using kmeans as the clustering method. I plotted the variables fixed.acidity and volatile.acidity.
+\pagebreak
+
+``` {r wine3, echo=FALSE, message=FALSE, warning=FALSE}
+
+wine_kmeans =kmeans(wine_color_qual, 2, nstart=30)
+
+wine_kmeans_plot = ggplot(wine, aes(x=fixed.acidity, y=volatile.acidity, color=factor(wine_kmeans$cluster)))+geom_point()+labs(x="fixed_acidity", y="volatile_acidity", color="Wine color") + scale_color_manual(values=c("red", "white"))
+
+wine_kmeans_plot
+
+```
+I noticed that the colors encroached on each other and thus did not perform a solid 2-cluster group. There are some points far inside the white "territory" that are identified as red wine when they fall far outside of the red cluster.
+
+In conclusion, I would prefer the PCA method for distinguishing between the two wine colors. Not only was it simple to use, but also requires far less fine-tuning to get closer to the PCA results using kmeans.
+
+However, the PCA method is not great when it comes to characterizing wine quality.
+Below is the plot of PC1 and PC2 for the wine quality.
+
+``` {r wine4, echo=FALSE, message=FALSE, warning=FALSE}
+
+wine_PCA_plot2 = ggplot(wine_PCA_df, aes(x=PC1, y=PC2, color=wine$quality))+geom_point()
+
+wine_PCA_plot2
+```
+The plot for PCA is not good at distinguishing the wine qualities and it seems like there is too much noise. 
+
+2) Market segmentation
+
+
+``` {r market1, echo=FALSE, message=FALSE, warning=FALSE}
+
+market <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv")
+
+marketing = market %>%
+  select(-c (X, chatter, spam, adult))
+
+```
+
+I dropped the X column because it was a non-numeric column that listed out the people who were tweeting. Additionally, I removed the chatter variable as annotators may use this label along with the uncategorized label, so I kept the "official" variable that was recommended to the annotators to use. Lastly, I removed the spam and adult(pornographic) variables since there may be some "bot tweets" that may slip through into the data set. As such, it may not define the market segment accurately.
+
+I decided to use kmeans to define the market segments. I started with the elbow method in order to determine the number of clusters.
+
+``` {r market2, echo=FALSE, message=FALSE, warning=FALSE}
+
+K = seq(2,20,by=1)
+
+wss_list = list()
+
+for(k in K){
+  kmeans_cluster = kmeans(marketing, k, nstart=25)
+  wss_list[[k-1]] = kmeans_cluster$tot.withinss
+}
+
+wss=unlist(wss_list)
+
+kmeans_df = data.frame(K, wss)
+
+kmeans_elbow = ggplot(kmeans_df, aes(K, wss)) + geom_point()
+
+kmeans_elbow
+
+```
+
+Here, I chose to consider K=7 for 7 clusters.
+
+``` {r market3, echo=FALSE, message=FALSE, warning=FALSE}
+
+kmeans_cluster2 = kmeans(marketing, 7, nstart=25)
+
+kmeans_scaled = scale(marketing, center=TRUE, scale=TRUE)
+center= attr(kmeans_scaled, "scaled:center")
+scaled = attr(kmeans_scaled, "scaled:scale")
+
+
+one =c(kmeans_cluster2$center[1,]*scaled+center)
+
+df_1 = data.frame(one) %>% arrange(desc(one))
+
+head(df_1, 5)
+
+
+two =c(kmeans_cluster2$center[2,]*scaled+center)
+
+df_2 = data.frame(two) %>% arrange(desc(two))
+
+head(df_2, 5)
+
+
+three =c(kmeans_cluster2$center[3,]*scaled+center)
+
+df_3 = data.frame(three) %>% arrange(desc(three))
+
+head(df_3, 5)
+
+```
+\pagebreak
+
+``` {r market4, echo=FALSE, message=FALSE, warning=FALSE}
+
+four =c(kmeans_cluster2$center[4,]*scaled+center)
+
+df_4 = data.frame(four) %>% arrange(desc(four))
+
+head(df_4, 5)
+
+
+five =c(kmeans_cluster2$center[5,]*scaled+center)
+
+df_5 = data.frame(five) %>% arrange(desc(five))
+
+head(df_5, 5)
+
+
+six =c(kmeans_cluster2$center[6,]*scaled+center)
+
+df_6 = data.frame(six) %>% arrange(desc(six))
+
+head(df_6, 5)
+
+
+seven =c(kmeans_cluster2$center[7,]*scaled+center)
+
+df_7 = data.frame(seven) %>% arrange(desc(seven))
+
+head(df_7, 5)
+
+```
+
+To NutrientH20, I present my definition of the market segment as 7 clusters.
+
+
+The first cluster seems to consist of older adults who wish to stay fit and healthy, as seen by how they are involved in politics while also dominating the health and exercise aspects.
+
+
+The second cluster consists of students in college who wish to stay healthy.
+
+
+The third has adults who post frequently on the media about what they cook and wear, presumably the female gender.
+
+
+The fourth cluster is interested in the current state of the world and keeps track of politics, the traveling status, and the news.
+
+
+The fifth cluster seems to be those interested in shopping and cooking healthy foods as well as uploading photos online.
+
+
+The sixth are religious adults who have an interest in sports and food. As it is specifically food and not cooking, this cluster may be providing for many people, perhaps buying bread in bulk for church or even just providing nutritious food to friends and family on a daily basis.
+
+
+The seventh cluster consists of young college students who are highly interested in games and their phones, as well as those who are concerned about how healthy their diet is. We may be able to assume that both students who stay at their computer for long periods of time and busy college students may have unhealthy diets or consume fast foods or delivery services frequently, and are looking to improve their nutrition standards.
+
+
+In conclusion, there are seven distinct market segments, which can better help NutrientH20 appeal to each segment.
+
+
+3) Association rules for grocery purchases
+
+I used association rule mining to find out the rules for grocery baskets. 
+``` {r grocery1, results="hide", echo=FALSE, message=FALSE, warning=FALSE}
+
+grocery_list <- readLines("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/groceries.txt")
+
+grocery = as.data.frame(grocery_list)
+
+grocery_list <- strsplit(grocery$grocery_list, split=",")
+
+g_list <- lapply(grocery_list, unique)
+
+trade = as(g_list, "transactions")
+
+Rules = apriori(trade, parameter=list(support=0.01, confidence=0.2, target="rules"))
+```
+
+By lowering the support level below 0.1, I was able to have more than 1 rule occur.
+
+Below is the scatter plot of 232 rules.
+
+``` {r grocery2, echo=FALSE, message=FALSE, warning=FALSE}
+
+Rules_plot1 = plot(Rules)
+
+Rules_plot1
+
+```
+
+I filtered more rules out by targeting those with a lift greater than 2 and looked at the first 10 rules.
+
+``` {r grocery3, results="hide", echo=FALSE, message=FALSE, warning=FALSE}
+
+Rules_subset = (subset(Rules, lift>2))
+
+Rules_plot2 = plot(Rules_subset, method = "graph")
+
+Rules_subset2 = inspect(Rules_subset[1:10])
+```
+
+``` {r grocery4, echo=FALSE, message=FALSE, warning=FALSE}
+Rules_subset2
+
+```
+From the subset, I noticed that meats such as beef, pork, and chicken are bought with root vegetables, dairy such as curd and cheese are paired with yogurt as well as berry-flavored yogurt, and vegetables and onions are paired with other vegetables. 
+
+Conceptually, these rules make sense, as meats are paired with vegetables (a hamburger isn't complete without lettuce, onions, pickles and so on), and vegetables go well with other vegetables, such as for stew, curry, and so on. As for berries and yogurt, blueberry greek yogurt is very delicious.
+
+
+
+
+
+
