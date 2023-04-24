@@ -1,0 +1,310 @@
+---
+title: "Final Project"
+subtitle: "By Jae You (jhy479)"
+output: pdf_document
+---
+
+``` {r commands, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(tidyverse)
+library(rsample)  
+library(caret)
+library(modelr)
+library(parallel)
+library(foreach)
+library(mosaic)
+library(lubridate)
+library(ROCR)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(scales)
+library(knitr)
+library(corrplot)
+library(ggpubr)
+
+```
+
+**Abstract:** 
+
+The report answers whether a company should purchase the advertisement slot for the Superbowl or advertise on Twitch, the biggest streaming platform, using data from 2020. After comparing various predictive models, the report predicts a standardized estimate to explain the costs and benefits of advertising on Twitch and compares the result with that of the Superbowl advertisements. In conclusion, while advertising on Twitch has major flaws such as its high transaction costs and its lower purchasing power viewerbase, it has major potential to surpass advertisements on the Superbowl event based on its raw power in the number of viewers and watch time.
+
+ 
+
+``` {r twitch1, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
+
+twitch <- read.csv("https://raw.githubusercontent.com/jhy479/ECON395M/main/Final%20Project/twitchdata-update.csv")
+
+```
+
+**Introduction:** 
+
+  "Is it more efficient to run ads on Twitch or purchase an ad slot for the Superbowl?"
+ 
+
+  With the advent of modern media, streaming has gained much traction as a hub for advertisement. Twitch, the number one streaming platform, generated $1.54 billion in 2019, with $230 million being from ad revenue. 
+  
+  
+  The purpose of this report is to compare this new rising star to the titan in the U.S. advertisement scene: the Superbowl. Specifically, I compared the effect of purchasing an advertisement slot at the Superbowl versus running online advertisements on the channels of the Top 1000 streamers on the Twitch platform in order to see which method was more lucrative for a company interested in advertising their products. 
+  
+  
+  This comparison outlines the benefits and downsides of running advertisements on streaming platforms and during the Superbowl, which will help establish important borders in company meetings such as "budget" and "benefit" prior to sorting out the target market that any company wishes to approach. As such, it is crucial to answer the question of which advertising method is better in order to efficiently spend millions of dollars.
+  
+\pagebreak
+``` {r twitch2, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
+
+twitch <- twitch %>% mutate(daily_watch_time = Watch.time.Minutes./365)
+
+twitch <- twitch %>% mutate(daily_viewer_watch_time = daily_watch_time/Average.viewers)
+
+twitch_1 <- twitch %>% select(-c(Channel, Language))
+
+```
+
+
+**Methods:**
+
+  The data set I used from kaggle has information on variables relevant to the problem, which is the watch time(in minutes), stream time, and average viewers of the Top 1000 streamers in 2020.
+
+
+  In order to analyze the effects of advertising at the Superbowl versus advertising on the streams of the Top 1000 Twitch streamers, there needs to be a common unit of measure. Hence, I created the variables "daily_watch_time" by dividing "Watch.time.Minutes." by 365 and "daily_viewer_watch_time", which divided "daily_watch_time" by "Average.viewers". I fit a linear regression model, K-nearest neighbors, Classification and Regression Tree model, and a Random Forest model to predict "daily_viewer_watch_time." I ran each model 10 times and took the mean RMSE to measure the performance for each model. The model with the lowest RMSE was used to predict a 95% confidence interval of the estimate. 
+  
+  
+  I first mutated the data set to drop the Channel and Language variables because they were non-numeric identifiers for specific streamers. As the goal of this report is essentially to get the average benefits and costs of the Top 1000 streamers, it is not necessary to distinguish specific streamers. As for the predictive models, I removed the "Watch.time.Minutes." and "Average.viewers" variables due to issues with correlation, since my dependent variable included the two variables and thus had high correlation with them. I also removed the "Partnered" and "Mature" variables as they were not important for predicting how much viewers would watch daily on average.
+  
+  
+
+**Results:**
+
+  Below are the results for the predictive models for the Twitch dataset.
+
+Linear model:
+
+``` {r twitch lm, echo=FALSE, message=FALSE, warning=FALSE}
+
+twitch_lm = do(10)*{
+  twitch_split=initial_split(twitch_1, prop=0.8)
+  twitch_train=training(twitch_split)
+  twitch_test=testing(twitch_split)
+  twitch_lm=lm(daily_viewer_watch_time ~ . -Watch.time.Minutes. - Average.viewers - Partnered - Mature, data=twitch_train)
+  twitch_lm_RMSE = rmse(twitch_lm, twitch_test)
+}
+head(twitch_lm_RMSE)
+
+  
+```
+
+K-Nearest Neighbors model:
+
+``` {r twitch KNN, echo=FALSE, message=FALSE, warning=FALSE}
+
+twitch2_split=initial_split(twitch_1, prop = 0.8)
+twitch2_train=training(twitch2_split)
+twitch2_test=testing(twitch2_split)
+
+for (x in 2:100) {
+  twitch_knn = knnreg(daily_viewer_watch_time ~ . -Watch.time.Minutes. - Average.viewers - Partnered - Mature, data = twitch2_train, k = x)
+  knn_rmse = rmse(twitch_knn, twitch2_test)
+}
+
+head(knn_rmse)
+```
+
+Classification and Regression Tree model (CART):
+
+``` {r twitch CART, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+for (x in 1:10) {
+  twitch3_split=initial_split(twitch_1, prop=0.8)
+  twitch3_train=training(twitch3_split)
+  twitch3_test=testing(twitch3_split)
+  twitch3_CART = rpart(daily_viewer_watch_time ~ . -Watch.time.Minutes. - Average.viewers - Partnered - Mature, data=twitch3_train,
+                      control = rpart.control(cp = 0.00001))
+  
+  prune_1se = function(my_tree) {
+    out = as.data.frame(my_tree$cptable)
+    thresh = min(out$xerror + out$xstd)
+    cp_opt = as.numeric(max(out$CP[out$xerror <= thresh]))
+    prune(my_tree, cp=cp_opt)
+  }
+  
+  twitch_CART_prune = prune_1se(twitch3_CART)
+  twitch_CART_RMSE = rmse(twitch_CART_prune, twitch3_test)
+}
+
+head(twitch_CART_RMSE)
+  
+```
+
+Random Forest Model:
+
+``` {r twitch Random Forest, echo=FALSE, message=FALSE, warning=FALSE}
+
+for (x in 1:10) {
+  twitch4_split=initial_split(twitch_1, prop=0.8)
+  twitch4_train=training(twitch4_split)
+  twitch4_test=testing(twitch4_split)
+  twitch_Forest = randomForest(daily_viewer_watch_time ~ . -Watch.time.Minutes. - Average.viewers - Partnered - Mature, data=twitch4_train)
+  twitch_Forest_RMSE = rmse(twitch_Forest, twitch4_test)
+}
+head(twitch_Forest_RMSE)
+
+  
+```
+
+ The KNN method had the largest RMSE at 250, the CART and Random Forest models had middling RMSEs ranging from 45 to 60, and the linear model had the lowest RMSE, ranging from 31 to 45. 
+ 
+ 
+ One potential issue for inconsistency is that I decided not to set the seed while running the models, as doing so would result in me choosing the best result for my tests. By trying to improve the reproducibility of the exact numbers, I may overfit the model on the validation set. Thus, there may be instances where the linear model has a higher RMSE than the Random Forest model if the Random Forest training and testing sets have a "very low roll" while the linear model has a "high roll", which would mean that the values are lower (and higher) than normal. However, through repeated testing, I have determined that the linear model has a consistently lower RMSE at around the mid 30s, while the CART and Random Forest models fail to drop below the 40s.
+ 
+ 
+ Thus, here is my linear model: 
+**
+lm(daily_viewer_watch_time ~ . -Watch.time.Minutes. - Average.viewers - Partnered - Mature)**
+
+ I predicted a 95% confidence interval for the variable daily_viewer_watch_time in order to find the expected amount of time that viewers watch per day. My confidence interval is 
+
+``` {r twitch conf int, results="hide", echo=FALSE, message=FALSE, warning=FALSE}
+
+lm5_test = do(10)*{
+  twitch5_split=initial_split(twitch_1, prop=0.8)
+  twitch5_train=training(twitch5_split)
+  twitch5_test=testing(twitch5_split)
+  twitch5_lm=lm(daily_viewer_watch_time ~ . -Watch.time.Minutes. - Average.viewers - Partnered - Mature, data=twitch5_train)
+  twitch5_lm_RMSE = rmse(twitch5_lm, twitch5_test)
+}
+
+twitch5_lm_pred = predict(twitch5_lm, twitch5_test, interval="confidence")
+head(twitch5_lm_pred)
+
+```
+
+[248.30, 285.62] with the fitted estimate at 267. This means that the expected average amount of time that viewers watch per day is likely between 248 minutes and 286 minutes, or around 4 to 5 hours.
+
+
+The next step is to convert the hours into ads watched. As Twitch charges advertisers based on the number of views and clicks that ads receive, the duration of the ad itself does not matter much for the cost. 
+
+
+I went under the notion that the ads that the company plays are **30 seconds long**, which is the same as the Superbowl commercials. The company may choose to secure any amount of ad-time per hour, but I have selected four times: streamers play 30 seconds of ads per hour, streamers play 1 minute of ads per hour, streamers play 2 minutes of ads per hour, and streamers play 3 minutes of ads per hour. This results in playing ads **1 time per hour, 2 times per hour, 4 times per hour, and 6 times per hour.**
+
+
+For the costs of the ads, Twitch is highly secretive about both ad costs and how much viewers click on ads on the platform. I made the assumption that the amount of viewers that click on the ads online will be the same as the number of people who remember and check out the ads after watching the Superbowl. However, this estimate is likely to be inaccurate in favor of the streaming platform: viewers are much more likely to click online advertisements over in-person events or watching games at the Superbowl online, as there are no distractions other than the ad and clicking is much easier than remembering that an ad exists after the Superbowl is over. 
+
+
+The advertisement costs incurred by the company are between $2 to $10 per 1000 views, according to various reports about Twitch advertisement costs. For simplicity, I set the baseline cost to **$5 per 1000 views.**
+
+
+With this information, I made two tables showing the Number of hours each viewer watches the stream, and the number of ads viewed for the respective price that the company pays. The two tables use the lower and upper bounds of the confidence interval above.
+
+Here is the table for the lower bound [Figure 1]:
+
+```{r twitch table low, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+ads_30_low=(248.3/60)*1
+ads_30_high=(285.62/60)*1
+ads_30_low_t= ads_30_low*1000
+ads_30_high_t= ads_30_high*1000
+ads_30_cost_low = (ads_30_low)*(5)
+ads_30_cost_high = (ads_30_high)*(5)
+
+ads_1min_low=(248.3/60)*2
+ads_1min_high=(285.62/60)*2
+ads_1min_low_t= ads_1min_low*1000
+ads_1min_high_t= ads_1min_high*1000
+ads_1min_cost_low = (ads_1min_low)*(5)
+ads_1min_cost_high = (ads_1min_high)*(5)
+
+ads_2min_low=(248.3/60)*4
+ads_2min_high=(285.62/60)*4
+ads_2min_low_t= ads_2min_low*1000
+ads_2min_high_t= ads_2min_high*1000
+ads_2min_cost_low = (ads_2min_low)*(5)
+ads_2min_cost_high = (ads_2min_high)*(5)
+
+ads_3min_low=(248.3/60)*6
+ads_3min_high=(285.62/60)*6
+ads_3min_low_t= ads_3min_low*1000
+ads_3min_high_t= ads_3min_high*1000
+ads_3min_cost_low = (ads_3min_low)*(5)
+ads_3min_cost_high = (ads_3min_high)*(5)
+
+table_low <- matrix(c(4.14, 4138, 20.69, 8.28, 8277, 41.38, 16.55, 16553, 82.77, 24.83, 24830, 124.15), ncol=3, byrow=TRUE)
+
+colnames(table_low) <- c('Number of hours','Number of Ads Viewed','Cost(in Dollars)')
+rownames(table_low) <- c('30 sec','1 minute','2 minutes', '3 minutes')
+
+table_low <- as.table(table_low)
+print(table_low)
+```
+
+So the first row shows that a 30 second ad will get 4138 views for $20.69 on the lower end, with the average viewer watching for 4.14 hours.
+
+
+Here is the table for the upper bound confidence interval [Figure 2]:
+
+```{r twitch table high, echo=FALSE, message=FALSE, warning=FALSE}
+
+table_high <- matrix(c(4.76, 4760, 23.80, 9.52, 9521, 47.60, 19.04, 19041, 95.21, 28.56, 28562, 142.81), ncol=3, byrow=TRUE)
+
+colnames(table_high) <- c('Number of hours','Number of Ads Viewed','Cost(in Dollars)')
+rownames(table_high) <- c('30 sec','1 minute','2 minutes', '3 minutes')
+
+table_high <- as.table(table_high)
+print(table_high)
+
+```
+
+
+The 2020 Superbowl cost $5.6 million for an advertisement slot of 30 seconds, with 91.6 million viewers on average. These figures were obtained from [site #3] listed in the appendix section. One ad run from the company would be 91.6 million views, two would be 183.2 million views, and although three ads from a company without buying additional slots may be 274.8 million views, it is unlikely that the ads will be able to show that often during Superbowl from a single slot. This is because Superbowl ads are highly contested and infrequent, so being able to repeatedly show the audience the same ads multiple times is unlikely. In 2020, there were 81 commercial ads shown, which would mean that every company who bought an ad slot likely played their ads once or twice per slot.
+
+
+\pagebreak
+
+**Conclusion:**
+
+The very first thing that we can notice is how cheap the cost of advertising on Twitch is. From [Figure 1] showing the number of ads viewed at their cost, the lower bound and upper bound estimates range from 4138 ads viewed to 4760 ads viewed at a price of $20~$24. Since the cost of the Twitch advertisement does not change with the duration of the advertisement, the only cost in this scenario is the cost from having viewers at $5 per 1000 viewer, or half-a-cent per viewer. One may believe that the Superbowl has more viewers due to Twitch's much cheaper price, but the Twitch website has 140 million unique visits a month, which is 1.68 billion visits to the platform in a year. And every year, one Superbowl occurs, which would mean that the same time duration applies for both Twitch advertisements and Superbowl advertisements. As such, Twitch's price of $0.005 per viewer is quite ludicriously cheap compared to the Superbowl's price of $16.36 per viewer if we just look at it from face value. 
+
+
+However, there are several caveats between streaming and a major event like the Superbowl. The major one is the costs to transaction: negotiating with a Network like CBS or FOX means making a transaction with one company. On the other hand, negotiating with the top 1000 streamers would mean 1000 separate interactions on top of 1000 more negotiations with Twitch. And negotiation with the streamer individually would be necessary, as some of the top streamers may be fully booked, have language barriers, or even refuse to play certain advertisements. Although I could not calculate the cost of these negotiations in my report, I do believe that it must be significant enough to make advertising during the Superbowl worth the $5.6 million cost. After all, if Twitch is enough for all the advertisements that a company needs, then nobody would buy Superbowl advertisement slots which is clearly not the case.
+
+
+If there were no transaction costs for communicating with 1000 streamers along with the platform itself, then it would only take $458,000 to recoup the 91.6 million views from the Superbowl advertisements, or $916,000 if ads in the Superbowl were shown twice per slot. Even at the highest reported price on Twitch of $10 per 1000 viewers, you are only looking at double the reported price which is $1.83 million, a third of the amount needed for the Superbowl slot. This would mean that the transaction costs could add up to roughly $3.77 million and it would still be worth advertising on Twitch over buying the Superbowl advertisement slots. 
+
+
+And it would be correct, if not for the second limitation of Twitch and streaming platforms in general: the viewers themselves, referred to the viewerbase. Most people who are live at the Superbowl venue are able to spend money on non-necessities, as they are able to pay for the tickets to the stadium. As such, they would be prime candidates for advertisements to lead to purchases since the audience would be able to afford the products in the first place. And for those watching the Superbowl online, the majority of people who follow sports heavily are those who are in adulthood, and thus can afford to indulge in purchases every now and then.
+
+
+With Twitch, a majority of its users are teenagers or young adults who can't afford or even earn money to purchase goods. This alone eliminates a huge share of the 140 million viewers a month on the platform for any company looking to sell its products. And for those teenagers to purchase anything, they would be using their parents' money rather than their own: in that case, one may look to advertise on the Superbowl livestream instead since parents, or adults with families, are likely a huge portion of the Superbowl audience. The other group of people on Twitch would be students who are busy paying for their studies or in college debt to think about purchasing anything else that isn't food, shelter, or clothing. Again, not the most appetizing of targets for advertisements to land on. Although this status quo may change when these young adults on Twitch grow up and if online streaming platforms like Twitch become "the next Superbowl" for corporate advertisements, currently, the Twitch viewerbase does not have the heavy buying power that people watching the Superbowl do. It's evident based on how Red Bull is advertised on the most followed stream, Riot Games, on Twitch as it is a relatively cheap energy drink that meets the needs of Twitch's viewerbase: students who need lots of caffeine to study and young adults who enjoy playing video games late into the night.
+
+
+That's not to say that this study was useless and that advertising in the Superbowl is better than advertising on Twitch streams: far from it. In the end, this is a comparison between two sources for advertisements, Twitch and the Superbowl, under very favorable conditions for Twitch. And those conditions are the lack of transaction costs for setting up the advertisements on Twitch in the first place and the fact that not all of the viewers are equal in buying power. On the other hand, **if these two conditions are satisfied, then Twitch becomes much more efficient for a company to reach out to a large audience at an affordable price.** And to an extent, both of these limitations can be fixed with time. As time goes on and the next generation replaces the previous generation, we will live in a world where people grew up on the internet and on streaming sites like Twitch. Just as how people grew up on sports before the introduction of the internet. And with demand comes supply: with the growing buying power of the new generation of parents, more and more companies will see the massive amount of viewers online: 1.68 billion viewers a year, which is the amount of viewers of 16 Superbowl advertisement slots over the course of 16 years. In light of this, there will definitely be changes towards reducing the transaction costs, and new methods and inventions for tackling this vexing problem that stands in the way between companies and their 1.68 billion potential customers.
+
+
+In conclusion, advertising on Twitch is far more efficient than purchasing an advertisement slot for the Superbowl if the drawbacks of advertising to a wide audience on Twitch were eliminated. In my report, I was unable to document and numerically analyze the two drawbacks of Twitch advertisements for companies: the transaction costs of negotiating with the top 1000 streamers and the difference in purchasing power of the Twitch viewerbase and the Superbowl viewerbase. While purchasing power may be difficult but doable to document, I believe that collecting data on the transaction costs is next to impossible for most people. In order to predict an estimate for the transaction costs, we would need to have the negotiations of each individual streamer and Twitch, along with the hourly wages and time that it took for a company to contact the Top 1000 streamers and strike a deal with Twitch for all the streamers. While the Superbowl remains the more reliable method as of now, in the near future, I believe that Twitch advertisements have the potential to be revolutionary in how companies will seek to advertise their products.
+
+\pagebreak
+
+**Appendix:**
+
+I posted the links to where I got all my sources of information in the appendix, as I refer to several links in the main body of my report. I also added a brief explanation to each site.
+
+
+dataset = "https://www.kaggle.com/datasets/aayushmishra1512/twitchdata?resource=download" 
+
+
+[site #2] = cost of twitch ads = "https://blog.hootsuite.com/twitch-ads/"
+
+
+[site #3] = cost and viewership of superbowl ads = "https://www.superbowl-ads.com/cost-of-super-bowl-advertising-breakdown-by-year/"
+
+
+[site #4] = twitch ad revenue in 2019 = "https://marketsplash.com/twitch-statistics/"
+
+
+[site #5] = facts about twitch platform = "https://www.demandsage.com/twitch-users/"
+
+
+
